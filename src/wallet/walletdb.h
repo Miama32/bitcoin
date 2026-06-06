@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 class CScript;
@@ -44,7 +45,6 @@ enum class DBErrors : int
 {
     LOAD_OK = 0,
     NEED_RESCAN = 1,
-    NEED_REWRITE = 2,
     EXTERNAL_SIGNER_SUPPORT_REQUIRED = 3,
     NONCRITICAL_ERROR = 4,
     TOO_NEW = 5,
@@ -126,6 +126,10 @@ public:
     bool operator==(const CHDChain& chain) const
     {
         return seed_id == chain.seed_id;
+    }
+    bool operator<(const CHDChain& chain) const
+    {
+        return seed_id < chain.seed_id;
     }
 };
 

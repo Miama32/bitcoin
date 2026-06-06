@@ -70,7 +70,7 @@ struct PrecomputedData
                 coins[i].out.scriptPubKey[0] = OP_HASH160;
                 coins[i].out.scriptPubKey[1] = 20;
                 std::copy(hash.begin(), hash.begin() + 20, coins[i].out.scriptPubKey.begin() + 2);
-                coins[i].out.scriptPubKey[12] = OP_EQUAL;
+                coins[i].out.scriptPubKey[22] = OP_EQUAL;
                 break;
             case 2: /* P2WPKH */
                 coins[i].out.scriptPubKey.resize(22);
@@ -139,7 +139,7 @@ struct CacheLevel
  *
  * The initial state consists of the empty UTXO set.
  */
-class CoinsViewBottom final : public CCoinsView
+class CoinsViewBottom final : public CoinsViewEmpty
 {
     std::map<COutPoint, Coin> m_data;
 
@@ -152,11 +152,6 @@ public:
         }
         return std::nullopt;
     }
-
-    uint256 GetBestBlock() const final { return {}; }
-    std::vector<uint256> GetHeadBlocks() const final { return {}; }
-    std::unique_ptr<CCoinsViewCursor> Cursor() const final { return {}; }
-    size_t EstimateSize() const final { return m_data.size(); }
 
     void BatchWrite(CoinsViewCacheCursor& cursor, const uint256&) final
     {
@@ -252,7 +247,7 @@ FUZZ_TARGET(coinscache_sim)
         CallOneOf(
             provider,
 
-            [&]() { // GetCoin
+            [&]() { // PeekCoin/GetCoin
                 uint32_t outpointidx = provider.ConsumeIntegralInRange<uint32_t>(0, NUM_OUTPOINTS - 1);
                 // Look up in simulation data.
                 auto sim = lookup(outpointidx);
@@ -451,7 +446,7 @@ FUZZ_TARGET(coinscache_sim)
             }
         }
 
-        // HaveCoinInCache ignores spent coins, so GetCacheSize() may exceed it. */
+        // HaveCoinInCache ignores spent coins, so GetCacheSize() may exceed it.
         assert(cache.GetCacheSize() >= cache_size);
     }
 

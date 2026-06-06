@@ -11,9 +11,8 @@ from test_framework.util import (
     assert_equal,
     assert_greater_than,
     assert_greater_than_or_equal,
+    JSONRPCException,
 )
-
-from test_framework.authproxy import JSONRPCException
 
 import http
 import subprocess
@@ -111,7 +110,7 @@ class RpcMiscTest(BitcoinTestFramework):
                 "txindex": values,
                 "basic block filter index": values,
                 "coinstatsindex": values,
-                "txospenderindex": values
+                "txospenderindex": values,
             }
         )
         # Specifying an index by name returns only the status of that index

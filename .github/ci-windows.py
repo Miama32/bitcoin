@@ -8,6 +8,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent / "test"))
@@ -33,8 +34,6 @@ GENERATE_OPTIONS = {
     "fuzz": [
         "-DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON",
         "-DVCPKG_MANIFEST_FEATURES=wallet",
-        "-DBUILD_GUI=OFF",
-        "-DWITH_ZMQ=OFF",
         "-DBUILD_FOR_FUZZING=ON",
         "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON",
     ],
@@ -70,10 +69,20 @@ def generate(ci_type):
         "-B",
         "build",
         "-Werror=dev",
-        "--preset",
-        "vs2026",
+        "--preset=vs2026",
+        # Using x64-windows-release for both host and target triplets
+        # to ensure vcpkg builds only release packages, thereby optimizing
+        # build time.
+        # See https://github.com/microsoft/vcpkg/issues/50927.
+        "-DVCPKG_HOST_TRIPLET=x64-windows-release",
+        "-DVCPKG_TARGET_TRIPLET=x64-windows-release",
     ] + GENERATE_OPTIONS[ci_type]
-    run(command)
+    if run(command, check=False).returncode != 0:
+        print("=== ⚠️ ===")
+        print("Generate failure! Network issue? Retry once ...")
+        time.sleep(12)
+        print("=== ⚠️ ===")
+        run(command)
 
 
 def build(_ci_type):
@@ -109,7 +118,6 @@ def check_manifests(ci_type):
         "fuzz.exe",
         "bench_bitcoin.exe",
         "test_bitcoin-qt.exe",
-        "test_kernel.exe",
         "bitcoin-chainstate.exe",
     }
     for entry in release_dir.iterdir():
@@ -188,7 +196,7 @@ def run_tests(ci_type):
             "--jobs",
             num_procs,
             "--quiet",
-            f"--tmpdirprefix={workspace}",
+            f"--tmpdirprefix={workspace / '_ _'}",
             "--combinedlogslen=99999999",
             *shlex.split(os.environ.get("TEST_RUNNER_EXTRA", "").strip()),
         ]

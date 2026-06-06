@@ -44,7 +44,6 @@ def check_manifests():
     skipped = {  # Skip as they currently do not have manifests
         "fuzz.exe",
         "bench_bitcoin.exe",
-        "test_kernel.exe",
     }
     for entry in release_dir.iterdir():
         if entry.suffix.lower() != ".exe":
@@ -97,15 +96,12 @@ def run_functional_tests():
         "--jobs",
         num_procs,
         "--quiet",
-        f"--tmpdirprefix={workspace}",
+        f"--tmpdirprefix={workspace / '_ _'}",
         "--combinedlogslen=99999999",
         *shlex.split(os.environ.get("TEST_RUNNER_EXTRA", "").strip()),
         # feature_unsupported_utxo_db.py fails on Windows because of emojis in the test data directory.
         "--exclude",
         "feature_unsupported_utxo_db.py",
-        # See https://github.com/bitcoin/bitcoin/issues/31409.
-        "--exclude",
-        "wallet_multiwallet.py",
     ]
     run(test_runner_cmd)
 

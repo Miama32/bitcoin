@@ -5,32 +5,35 @@
 #ifndef BITCOIN_SCRIPT_MINISCRIPT_H
 #define BITCOIN_SCRIPT_MINISCRIPT_H
 
+#include <consensus/consensus.h>
+#include <crypto/hex_base.h>
+#include <policy/policy.h>
+#include <script/interpreter.h>
+#include <script/parsing.h>
+#include <script/script.h>
+#include <serialize.h>
+#include <util/check.h>
+#include <util/strencodings.h>
+#include <util/string.h>
+#include <util/vector.h>
+
 #include <algorithm>
 #include <compare>
 #include <concepts>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
-
-#include <consensus/consensus.h>
-#include <policy/policy.h>
-#include <script/interpreter.h>
-#include <script/parsing.h>
-#include <script/script.h>
-#include <serialize.h>
-#include <span.h>
-#include <util/check.h>
-#include <util/strencodings.h>
-#include <util/string.h>
-#include <util/vector.h>
 
 namespace miniscript {
 
@@ -552,6 +555,9 @@ public:
         // Destroy the subexpressions iteratively after moving out their
         // subexpressions to avoid a stack-overflow due to recursive calls to
         // the subs' destructors.
+        // We move vectors in order to only update array-pointers inside them
+        // rather than moving individual Node instances which would involve
+        // moving/copying each Node field.
         std::vector<std::vector<Node>> queue;
         queue.push_back(std::move(subs));
         do {
@@ -607,7 +613,7 @@ private:
     // This is kept private as no valid fragment has all of these arguments.
     // Only used by Clone()
     Node(internal::NoDupCheck, MiniscriptContext script_ctx, enum Fragment nt, std::vector<Node> sub, std::vector<Key> key, std::vector<unsigned char> arg, uint32_t val)
-        : fragment(nt), k(val), keys(key), data(std::move(arg)), subs(std::move(sub)), m_script_ctx{script_ctx}, ops(CalcOps()), ss(CalcStackSize()), ws(CalcWitnessSize()), typ(CalcType()), scriptlen(CalcScriptLen()) {}
+        : fragment(nt), k(val), keys(std::move(key)), data(std::move(arg)), subs(std::move(sub)), m_script_ctx{script_ctx}, ops(CalcOps()), ss(CalcStackSize()), ws(CalcWitnessSize()), typ(CalcType()), scriptlen(CalcScriptLen()) {}
 
     //! Compute the length of the script for this miniscript (including children).
     size_t CalcScriptLen() const

@@ -9,10 +9,10 @@
 #include <consensus/validation.h>
 #include <crypto/sha256.h>
 #include <crypto/siphash.h>
-#include <logging.h>
 #include <random.h>
 #include <streams.h>
 #include <txmempool.h>
+#include <util/log.h>
 #include <validation.h>
 
 #include <unordered_map>
@@ -110,8 +110,6 @@ ReadStatus PartiallyDownloadedBlock::InitData(const CBlockHeaderAndShortTxIDs& c
         if (shorttxids.bucket_size(shorttxids.bucket(cmpctblock.shorttxids[i])) > 12)
             return READ_STATUS_FAILED;
     }
-    // TODO: in the shortid-collision case, we should instead request both transactions
-    // which collided. Falling back to full-block-request here is overkill.
     if (shorttxids.size() != cmpctblock.shorttxids.size())
         return READ_STATUS_FAILED; // Short ID collision
 
@@ -221,7 +219,7 @@ ReadStatus PartiallyDownloadedBlock::FillBlock(CBlock& block, const std::vector<
         return READ_STATUS_FAILED; // Possible Short ID collision
     }
 
-    if (LogAcceptCategory(BCLog::CMPCTBLOCK, BCLog::Level::Debug)) {
+    if (util::log::ShouldDebugLog(BCLog::CMPCTBLOCK)) {
         const uint256 hash{block.GetHash()};
         uint32_t tx_missing_size{0};
         for (const auto& tx : vtx_missing) tx_missing_size += tx->ComputeTotalSize();

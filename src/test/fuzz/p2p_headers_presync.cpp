@@ -8,7 +8,6 @@
 #include <net_processing.h>
 #include <netmessagemaker.h>
 #include <node/peerman_args.h>
-#include <pow.h>
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
@@ -143,13 +142,6 @@ CBlock ConsumeBlock(FuzzedDataProvider& fuzzed_data_provider, const uint256& pre
     return block;
 }
 
-void FinalizeHeader(CBlockHeader& header, const ChainstateManager& chainman)
-{
-    while (!CheckProofOfWork(header.GetHash(), header.nBits, chainman.GetParams().GetConsensus())) {
-        ++(header.nNonce);
-    }
-}
-
 // Global setup works for this test as state modification (specifically in the
 // block index) would indicate a bug.
 HeadersSyncSetup* g_testing_setup;
@@ -176,7 +168,7 @@ FUZZ_TARGET(p2p_headers_presync, .init = initialize)
 
     ChainstateManager& chainman = *g_testing_setup->m_node.chainman;
     CBlockHeader base{chainman.GetParams().GenesisBlock()};
-    SetMockTime(base.nTime);
+    const NodeClockContext clock_ctx{base.Time()};
 
     LOCK(NetEventsInterface::g_msgproc_mutex);
 

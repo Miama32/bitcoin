@@ -36,6 +36,7 @@ from test_framework.util import (
 
 MAX_LOCATOR_SZ = 101
 MAX_BLOCK_WEIGHT = 4000000
+MAX_BLOCK_SIGOPS_COST = 80000
 DEFAULT_BLOCK_RESERVED_WEIGHT = 8000
 MINIMUM_BLOCK_RESERVED_WEIGHT = 2000
 MAX_BLOOM_FILTER_SIZE = 36000
@@ -284,7 +285,7 @@ def from_binary(cls, stream):
     obj = cls()
     obj.deserialize(stream)
     if was_bytes:
-        assert len(stream.read()) == 0
+        assert_equal(len(stream.read()), 0)
     return obj
 
 
@@ -343,7 +344,7 @@ class CAddress:
 
     def serialize(self, *, with_time=True):
         """Serialize in addrv1 format (pre-BIP155)"""
-        assert self.net == self.NET_IPV4
+        assert_equal(self.net, self.NET_IPV4)
         r = b""
         if with_time:
             # VERSION messages serialize CAddress objects without time
@@ -364,7 +365,7 @@ class CAddress:
         assert self.net in self.ADDRV2_NET_NAME
 
         address_length = deser_compact_size(f)
-        assert address_length == self.ADDRV2_ADDRESS_LENGTH[self.net]
+        assert_equal(address_length, self.ADDRV2_ADDRESS_LENGTH[self.net])
 
         addr_bytes = f.read(address_length)
         if self.net == self.NET_IPV4:

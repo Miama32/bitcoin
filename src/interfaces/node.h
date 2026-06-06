@@ -7,18 +7,19 @@
 
 #include <common/settings.h>
 #include <consensus/amount.h>
-#include <logging.h>
 #include <net.h>
 #include <net_types.h>
 #include <netaddress.h>
 #include <netbase.h>
 #include <support/allocators/secure.h>
+#include <util/log.h>
 #include <util/translation.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -123,7 +124,7 @@ public:
     virtual void mapPort(bool enable) = 0;
 
     //! Get proxy.
-    virtual bool getProxy(Network net, Proxy& proxy_info) = 0;
+    virtual std::optional<Proxy> getProxy(Network net) = 0;
 
     //! Get number of connections.
     virtual size_t getNodeCount(ConnectionDirection flags) = 0;

@@ -2,36 +2,43 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <node/mini_miner.h>
+
+#include <consensus/amount.h>
+#include <kernel/cs_main.h>
+#include <policy/feerate.h>
+#include <primitives/transaction.h>
+#include <script/script.h>
+#include <sync.h>
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
-#include <test/fuzz/util/mempool.h>
 #include <test/util/script.h>
+#include <test/util/random.h>
 #include <test/util/setup_common.h>
+#include <test/util/time.h>
 #include <test/util/txmempool.h>
-#include <test/util/mining.h>
-
-#include <node/miner.h>
-#include <node/mini_miner.h>
-#include <node/types.h>
-#include <primitives/transaction.h>
-#include <random.h>
 #include <txmempool.h>
+#include <uint256.h>
 #include <util/check.h>
-#include <util/time.h>
 #include <util/translation.h>
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <deque>
+#include <functional>
+#include <map>
+#include <optional>
+#include <utility>
 #include <vector>
 
 namespace {
 
-const TestingSetup* g_setup;
 std::deque<COutPoint> g_available_coins;
 void initialize_miner()
 {
     static const auto testing_setup = MakeNoLogFileContext<const TestingSetup>();
-    g_setup = testing_setup.get();
     for (uint32_t i = 0; i < uint32_t{100}; ++i) {
         g_available_coins.emplace_back(Txid::FromUint256(uint256::ZERO), i);
     }
@@ -42,7 +49,7 @@ FUZZ_TARGET(mini_miner, .init = initialize_miner)
 {
     SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
-    SetMockTime(ConsumeTime(fuzzed_data_provider));
+    NodeClockContext clock_ctx{ConsumeTime(fuzzed_data_provider)};
     bilingual_str error;
     CTxMemPool pool{CTxMemPool::Options{}, error};
     Assert(error.empty());

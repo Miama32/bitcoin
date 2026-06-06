@@ -5,6 +5,7 @@
 #include <blockfilter.h>
 #include <clientversion.h>
 #include <common/args.h>
+#include <common/license_info.h>
 #include <common/messages.h>
 #include <common/settings.h>
 #include <common/system.h>
@@ -63,11 +64,11 @@ FUZZ_TARGET(string)
     const auto width{fuzzed_data_provider.ConsumeIntegralInRange<size_t>(1, 1000)};
     (void)FormatParagraph(random_string_1, width, fuzzed_data_provider.ConsumeIntegralInRange<size_t>(0, width));
     (void)FormatSubVersion(random_string_1, fuzzed_data_provider.ConsumeIntegral<int>(), random_string_vector);
-    (void)GetDescriptorChecksum(random_string_1);
     (void)HelpExampleCli(random_string_1, random_string_2);
     (void)HelpExampleRpc(random_string_1, random_string_2);
     (void)HelpMessageGroup(random_string_1);
-    (void)HelpMessageOpt(random_string_1, random_string_2);
+    (void)HelpMessageOpt(random_string_1, "", random_string_2);
+    (void)HelpMessageOpt(random_string_1, random_string_2, "");
     (void)IsDeprecatedRPCEnabled(random_string_1);
     (void)Join(random_string_vector, random_string_1);
     (void)JSONRPCError(fuzzed_data_provider.ConsumeIntegral<int>(), random_string_1);

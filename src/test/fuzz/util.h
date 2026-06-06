@@ -13,6 +13,7 @@
 #include <consensus/consensus.h>
 #include <key.h>
 #include <merkleblock.h>
+#include <pow.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
 #include <serialize.h>
@@ -20,6 +21,7 @@
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <uint256.h>
+#include <validation.h>
 
 #include <algorithm>
 #include <array>
@@ -124,6 +126,19 @@ template <typename T>
     return obj;
 }
 
+template <typename T>
+[[nodiscard]] inline std::optional<T> ConsumeDeserializableConstructor(FuzzedDataProvider& fuzzed_data_provider, const std::optional<size_t>& max_length = std::nullopt) noexcept
+{
+    const std::vector<uint8_t> buffer = ConsumeRandomLengthByteVector(fuzzed_data_provider, max_length);
+    SpanReader ds{buffer};
+    try {
+        T obj(deserialize, ds);
+        return obj;
+    } catch (const std::ios_base::failure&) {
+        return std::nullopt;
+    }
+}
+
 template <typename WeakEnumType, size_t size>
 [[nodiscard]] WeakEnumType ConsumeWeakEnum(FuzzedDataProvider& fuzzed_data_provider, const WeakEnumType (&all_types)[size]) noexcept
 {
@@ -140,7 +155,16 @@ template <typename WeakEnumType, size_t size>
 [[nodiscard]] CAmount ConsumeMoney(FuzzedDataProvider& fuzzed_data_provider, const std::optional<CAmount>& max = std::nullopt) noexcept;
 
 [[nodiscard]] NodeSeconds ConsumeTime(FuzzedDataProvider& fuzzed_data_provider, const std::optional<int64_t>& min = std::nullopt, const std::optional<int64_t>& max = std::nullopt) noexcept;
-[[nodiscard]] std::chrono::seconds ConsumeDuration(FuzzedDataProvider& fuzzed_data_provider, std::chrono::seconds min, std::chrono::seconds max) noexcept;
+
+template <class Dur>
+// Having the compiler infer the template argument from the function argument
+// is dangerous, because the desired return value generally has a different
+// type than the function argument. So std::common_type is used to force the
+// call site to specify the type of the return value.
+[[nodiscard]] Dur ConsumeDuration(FuzzedDataProvider& fuzzed_data_provider, std::common_type_t<Dur> min, std::common_type_t<Dur> max) noexcept
+{
+    return Dur{fuzzed_data_provider.ConsumeIntegralInRange(min.count(), max.count())};
+}
 
 [[nodiscard]] CMutableTransaction ConsumeTransaction(FuzzedDataProvider& fuzzed_data_provider, const std::optional<std::vector<Txid>>& prevout_txids, int max_num_in = 10, int max_num_out = 10) noexcept;
 
@@ -333,6 +357,13 @@ void ReadFromStream(FuzzedDataProvider& fuzzed_data_provider, Stream& stream) no
         } catch (const std::ios_base::failure&) {
             break;
         }
+    }
+}
+
+inline void FinalizeHeader(CBlockHeader& header, const ChainstateManager& chainman)
+{
+    while (!CheckProofOfWork(header.GetHash(), header.nBits, chainman.GetParams().GetConsensus())) {
+        ++(header.nNonce);
     }
 }
 

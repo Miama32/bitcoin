@@ -38,13 +38,13 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
         # Add new version after each release:
         self.extra_args = [
             ["-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # Pre-release: use to mine blocks. noban for immediate tx relay
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # Pre-release: use to receive coins, swap wallets, etc
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v25.0
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v24.0.1
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v23.0
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1", f"-keypool={LAST_KEYPOOL_INDEX + 1}"], # v22.0
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v0.21.0
-            ["-nowallet", "-walletrbf=1", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v0.20.1
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # Pre-release: use to receive coins, swap wallets, etc
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v25.0
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v24.0.1
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v23.0
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1", f"-keypool={LAST_KEYPOOL_INDEX + 1}"], # v22.0
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v0.21.0
+            ["-nowallet", "-addresstype=bech32", "-whitelist=noban@127.0.0.1"], # v0.20.1
         ]
         self.wallet_names = [self.default_wallet_name]
 
@@ -240,8 +240,8 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
         node_master.createwallet(wallet_name="w2", disable_private_keys=True)
         wallet = node_master.get_wallet_rpc("w2")
         info = wallet.getwalletinfo()
-        assert info['private_keys_enabled'] == False
-        assert info['keypoolsize'] == 0
+        assert_equal(info['private_keys_enabled'], False)
+        assert_equal(info['keypoolsize'], 0)
 
         # w3: blank wallet, created on master: update this
         #     test when default blank wallets can no longer be opened by older versions.
@@ -249,7 +249,7 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
         wallet = node_master.get_wallet_rpc("w3")
         info = wallet.getwalletinfo()
         assert info['private_keys_enabled']
-        assert info['keypoolsize'] == 0
+        assert_equal(info['keypoolsize'], 0)
 
         # Unload wallets and copy to older nodes:
         node_master_wallets_dir = node_master.wallets_path
@@ -279,7 +279,7 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
                     wallet = n.get_wallet_rpc(wallet_name)
                     info = wallet.getwalletinfo()
                     if wallet_name == "w1":
-                        assert info['private_keys_enabled'] == True
+                        assert_equal(info['private_keys_enabled'], True)
                         assert info['keypoolsize'] > 0
                         txs = wallet.listtransactions()
                         assert_equal(len(txs), 5)
@@ -294,16 +294,17 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
                         assert_equal(txs[3]["replaced_by_txid"], tx4_id)
                         assert not hasattr(txs[3], "blockindex")
                     elif wallet_name == "w2":
-                        assert info['private_keys_enabled'] == False
-                        assert info['keypoolsize'] == 0
+                        assert_equal(info['private_keys_enabled'], False)
+                        assert_equal(info['keypoolsize'], 0)
                     else:
-                        assert info['private_keys_enabled'] == True
-                        assert info['keypoolsize'] == 0
+                        assert_equal(info['private_keys_enabled'], True)
+                        assert_equal(info['keypoolsize'], 0)
 
                     # Copy back to master
                     wallet.unloadwallet()
                     if n == node:
-                        shutil.rmtree(node_master.wallets_path / wallet_name)
+                        (node_master.wallets_path / wallet_name / "wallet.dat").unlink()
+                        (node_master.wallets_path / wallet_name).rmdir()
                         shutil.copytree(
                             n.wallets_path / wallet_name,
                             node_master.wallets_path / wallet_name,
@@ -348,7 +349,6 @@ class BackwardsCompatibilityTest(BitcoinTestFramework):
 
             # Restore the wallet to master
             load_res = node_master.restorewallet(wallet_name, backup_path)
-
             # There should be no warnings
             assert "warnings" not in load_res
 

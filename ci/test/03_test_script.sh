@@ -6,7 +6,12 @@
 
 export LC_ALL=C.UTF-8
 
-set -ex
+set -o errexit -o xtrace -o pipefail
+
+if [ "${DANGER_RUN_CI_ON_HOST}" != "1" ]; then
+  echo "This script will make unsafe local and global modifications, so it can only be run inside a container and requires DANGER_RUN_CI_ON_HOST=1"
+  exit 1
+fi
 
 cd "${BASE_ROOT_DIR}"
 
@@ -43,6 +48,19 @@ export HOST=${HOST:-$("$BASE_ROOT_DIR/depends/config.guess")}
 echo "=== BEGIN env ==="
 env
 echo "=== END env ==="
+
+# The CI framework should be flexible where it is run from. For example, from
+# a git-archive, a git-worktree, or a normal git repo.
+# The iwyu task requires a working git repo, which may not always be
+# available, so initialize one with force.
+if [[ "${RUN_IWYU}" == true ]]; then
+  mv .git .git_ci_backup || true
+  git init
+  git add ./src  # the git diff command used later for iwyu only cares about ./src
+  git config user.email "ci@ci"
+  git config user.name "CI"
+  git commit -m "dummy CI ./src init for IWYU"
+fi
 
 if [ "$RUN_FUZZ_TESTS" = "true" ]; then
   export DIR_FUZZ_IN=${DIR_QA_ASSETS}/fuzz_corpora/
@@ -91,7 +109,7 @@ ccache --zero-stats
 # Folder where the build is done.
 BASE_BUILD_DIR=${BASE_BUILD_DIR:-$BASE_SCRATCH_DIR/build-$HOST}
 
-BITCOIN_CONFIG_ALL="$BITCOIN_CONFIG_ALL -DCMAKE_INSTALL_PREFIX=$BASE_OUTDIR -Werror=dev"
+BITCOIN_CONFIG_ALL="$BITCOIN_CONFIG_ALL '-DCMAKE_INSTALL_PREFIX=$BASE_OUTDIR' -Werror=dev"
 
 if [[ "${RUN_IWYU}" == true || "${RUN_TIDY}" == true ]]; then
   BITCOIN_CONFIG_ALL="$BITCOIN_CONFIG_ALL -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
@@ -118,10 +136,30 @@ cmake --build "${BASE_BUILD_DIR}" "$MAKEJOBS" --target $GOAL || (
 )
 
 ccache --version | head -n 1 && ccache --show-stats --verbose
-hit_rate=$(ccache --show-stats | grep "Hits:" | head -1 | sed 's/.*(\(.*\)%).*/\1/')
-if [ "${hit_rate%.*}" -lt 75 ]; then
-  echo "::notice title=low ccache hitrate::Ccache hit-rate in $CONTAINER_NAME was $hit_rate%"
-fi
+ccache --print-stats | python3 -c '
+import os
+import sys
+
+for line in sys.stdin:
+    key, value = line.split("\t", 1)
+    # "primary storage" fallback only needed for ccache version 4.5.1
+    if key in ("local_storage_hit", "primary_storage_hit"):
+        hits = int(value)
+    elif key in ("local_storage_miss", "primary_storage_miss"):
+        miss = int(value)
+
+calls = hits + miss
+# codegen has no calls, so skip that here
+if calls:
+    rate = (hits / calls * 100)
+    print(f"{rate:.2f}")
+    if rate < 75:
+        container = os.environ["CONTAINER_NAME"]
+        print(
+            "::notice title=low ccache hitrate::"
+            f"Ccache hit-rate in {container} was {rate:.2f}%"
+        )
+'
 du -sh "${DEPENDS_DIR}"/*/
 du -sh "${PREVIOUS_RELEASES_DIR}"
 
@@ -135,6 +173,14 @@ fi
 
 if [ "$RUN_CHECK_DEPS" = "true" ]; then
   "${BASE_ROOT_DIR}/contrib/devtools/check-deps.sh" "${BASE_BUILD_DIR}"
+fi
+
+if [[ "$CI_OS_NAME" == "macos" && "${GOAL}" = "install deploy" ]]; then
+  unzip "${BASE_BUILD_DIR}/bitcoin-macos-app.zip" -d "${BASE_BUILD_DIR}/deploy"
+  if ! ( codesign --verify "${BASE_BUILD_DIR}/deploy/Bitcoin-Qt.app" ); then
+    echo "Codesigning failed."
+    false
+  fi
 fi
 
 if [ "$RUN_UNIT_TESTS" = "true" ]; then
@@ -183,7 +229,7 @@ fi
 
 if [[ "${RUN_IWYU}" == true ]]; then
   # TODO: Consider enforcing IWYU across the entire codebase.
-  FILES_WITH_ENFORCED_IWYU="/src/((crypto|index|kernel|primitives|univalue/(lib|test)|zmq)/.*\\.cpp|node/blockstorage\\.cpp|node/utxo_snapshot\\.cpp|core_io\\.cpp|signet\\.cpp)"
+  FILES_WITH_ENFORCED_IWYU="/src/(((crypto|index|kernel|primitives|script|univalue/(lib|test)|util|zmq)/.*|bench/(block_assemble|connectblock)|common/license_info|node/(blockstorage|interfaces|miner|mining_args|utxo_snapshot)|rpc/mining|clientversion|core_io|signet|init)\\.cpp)"
   jq --arg patterns "$FILES_WITH_ENFORCED_IWYU" 'map(select(.file | test($patterns)))' "${BASE_BUILD_DIR}/compile_commands.json" > "${BASE_BUILD_DIR}/compile_commands_iwyu_errors.json"
   jq --arg patterns "$FILES_WITH_ENFORCED_IWYU" 'map(select(.file | test($patterns) | not))' "${BASE_BUILD_DIR}/compile_commands.json" > "${BASE_BUILD_DIR}/compile_commands_iwyu_warnings.json"
 
@@ -191,14 +237,16 @@ if [[ "${RUN_IWYU}" == true ]]; then
 
   run_iwyu() {
     mv "${BASE_BUILD_DIR}/$1" "${BASE_BUILD_DIR}/compile_commands.json"
-    python3 "/include-what-you-use/iwyu_tool.py" \
+    {
+      python3 "/include-what-you-use/iwyu_tool.py" \
              -p "${BASE_BUILD_DIR}" "${MAKEJOBS}" \
              -- -Xiwyu --cxx17ns -Xiwyu --mapping_file="${BASE_ROOT_DIR}/contrib/devtools/iwyu/bitcoin.core.imp" \
              -Xiwyu --max_line_length=160 \
              -Xiwyu --check_also="*/primitives/*.h" \
-             2>&1 | tee /tmp/iwyu_ci.out
+             2>&1 || true
+    } | tee /tmp/iwyu_ci.out
     python3 "/include-what-you-use/fix_includes.py" --nosafe_headers < /tmp/iwyu_ci.out
-    git diff -U1 | ./contrib/devtools/clang-format-diff.py -binary="clang-format-${TIDY_LLVM_V}" -p1 -i -v
+    git diff -U1 | ./contrib/devtools/clang-format-diff.py -binary="clang-format-${IWYU_LLVM_V}" -p1 -i -v
   }
 
   run_iwyu "compile_commands_iwyu_errors.json"

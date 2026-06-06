@@ -9,7 +9,7 @@
 #include <dbwrapper.h>
 #include <interfaces/chain.h>
 #include <kernel/cs_main.h>
-#include <threadsafety.h>
+#include <sync.h>
 #include <uint256.h>
 #include <util/fs.h>
 #include <util/threadinterrupt.h>
@@ -167,6 +167,7 @@ public:
     /// Starts the initial sync process on a background thread.
     [[nodiscard]] bool StartBackgroundSync();
 
+    /// \anchor index_sync
     /// Sync the index with the block index starting from the current best block.
     /// Intended to be run in its own thread, m_thread_sync, and can be
     /// interrupted with m_interrupt. Once the index gets in sync, the m_synced
